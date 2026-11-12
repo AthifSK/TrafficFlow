@@ -10,6 +10,7 @@ from app.models.clustering import (
     train_kmeans, predict_kmeans,
     train_dbscan, assign_dbscan,
     compare_algorithms,
+    load_kmeans_artifacts, load_dbscan_artifacts,
 )
 
 router = APIRouter()
@@ -125,13 +126,19 @@ def compare_models():
 
 @router.post("/cluster")
 def cluster_new(file_or_stored: str = "stored"):
-    """Assign clusters to the already-extracted features (re-use stored models)."""
+    """Assign clusters to the already-extracted features (re-use stored or bundled models)."""
     features_df, feat_cols = _get_features()
     obs_df = state.get("preprocessed_df")
     result = {}
 
     km = state.get("model_kmeans")
     scaler_km = state.get("scaler")
+    if km is None or scaler_km is None:
+        km, scaler_km = load_kmeans_artifacts()
+        if km and scaler_km:
+            state.set("model_kmeans", km)
+            state.set("scaler", scaler_km)
+
     if km and scaler_km:
         labels = predict_kmeans(features_df, feat_cols, km, scaler_km)
         state.set("kmeans_labels", labels)
@@ -141,6 +148,12 @@ def cluster_new(file_or_stored: str = "stored"):
 
     db = state.get("model_dbscan")
     scaler_db = state.get("dbscan_scaler")
+    if db is None or scaler_db is None:
+        db, scaler_db = load_dbscan_artifacts()
+        if db and scaler_db:
+            state.set("model_dbscan", db)
+            state.set("dbscan_scaler", scaler_db)
+
     if db and scaler_db:
         labels = assign_dbscan(features_df, feat_cols, db, scaler_db)
         state.set("dbscan_labels", labels)

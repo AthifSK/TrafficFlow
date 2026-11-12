@@ -1,9 +1,14 @@
-"""Clustering models: K-Means and DBSCAN with evaluation."""
+"""Clustering models: K-Means and DBSCAN with evaluation.
+
+Production-safe storage:
+- Pre-trained / bundled artifacts: Read-only, resolved relative to source file (BUNDLED_MODELS_DIR).
+- Newly trained runtime models: Saved to writable runtime storage (/tmp/trafficflow/models).
+"""
 from __future__ import annotations
+import logging
 import numpy as np
 import pandas as pd
 import joblib
-import os
 from typing import Any, Dict, List, Optional, Tuple
 
 from sklearn.cluster import KMeans, DBSCAN
@@ -14,8 +19,13 @@ from sklearn.metrics import (
     calinski_harabasz_score,
 )
 
-MODELS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "..", "models")
-os.makedirs(MODELS_DIR, exist_ok=True)
+from app.core.storage import (
+    get_runtime_model_path,
+    resolve_model_path,
+    BUNDLED_MODELS_DIR,
+)
+
+logger = logging.getLogger("trafficflow.clustering")
 
 
 def _safe_metrics(X: np.ndarray, labels: np.ndarray) -> Dict[str, Any]:
@@ -78,9 +88,12 @@ def train_kmeans(
     unique_labels, counts = np.unique(labels, return_counts=True)
     metrics["cluster_sizes"] = {int(k): int(v) for k, v in zip(unique_labels, counts)}
 
-    # Save
-    joblib.dump(km, os.path.join(MODELS_DIR, "kmeans_model.pkl"))
-    joblib.dump(scaler, os.path.join(MODELS_DIR, "kmeans_scaler.pkl"))
+    # Save to writable runtime storage safely
+    try:
+        joblib.dump(km, get_runtime_model_path("kmeans_model.pkl"))
+        joblib.dump(scaler, get_runtime_model_path("kmeans_scaler.pkl"))
+    except Exception as exc:
+        logger.warning("Could not persist K-Means model to runtime storage: %s", exc)
 
     return km, scaler, labels, metrics
 
@@ -117,8 +130,12 @@ def train_dbscan(
     unique_labels, counts = np.unique(labels, return_counts=True)
     metrics["cluster_sizes"] = {int(k): int(v) for k, v in zip(unique_labels, counts)}
 
-    joblib.dump(db, os.path.join(MODELS_DIR, "dbscan_model.pkl"))
-    joblib.dump(scaler, os.path.join(MODELS_DIR, "dbscan_scaler.pkl"))
+    # Save to writable runtime storage safely
+    try:
+        joblib.dump(db, get_runtime_model_path("dbscan_model.pkl"))
+        joblib.dump(scaler, get_runtime_model_path("dbscan_scaler.pkl"))
+    except Exception as exc:
+        logger.warning("Could not persist DBSCAN model to runtime storage: %s", exc)
 
     return db, scaler, labels, metrics
 
@@ -153,6 +170,36 @@ def assign_dbscan(
 
     labels = np.where(min_dists <= db.eps, core_labels[nearest_core_idx], -1)
     return labels.astype(int)
+
+
+def load_kmeans_artifacts() -> Tuple[Optional[KMeans], Optional[StandardScaler]]:
+    """Load pre-trained or runtime-persisted K-Means model and scaler."""
+    model_path = resolve_model_path("kmeans_model.pkl")
+    scaler_path = resolve_model_path("kmeans_scaler.pkl")
+    if not model_path or not scaler_path:
+        return None, None
+    try:
+        km = joblib.load(model_path)
+        scaler = joblib.load(scaler_path)
+        return km, scaler
+    except Exception as exc:
+        logger.warning("Could not load K-Means artifacts: %s", exc)
+        return None, None
+
+
+def load_dbscan_artifacts() -> Tuple[Optional[DBSCAN], Optional[StandardScaler]]:
+    """Load pre-trained or runtime-persisted DBSCAN model and scaler."""
+    model_path = resolve_model_path("dbscan_model.pkl")
+    scaler_path = resolve_model_path("dbscan_scaler.pkl")
+    if not model_path or not scaler_path:
+        return None, None
+    try:
+        db = joblib.load(model_path)
+        scaler = joblib.load(scaler_path)
+        return db, scaler
+    except Exception as exc:
+        logger.warning("Could not load DBSCAN artifacts: %s", exc)
+        return None, None
 
 
 def compare_algorithms(

@@ -1,36 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "services": {
-    "backend": {
-      "root": "trafficflow/backend",
-      "framework": "fastapi",
-      "entrypoint": "app.main:app"
-    },
-    "frontend": {
-      "root": "trafficflow/frontend",
-      "framework": "vite",
-      "bindings": [
-        {
-          "type": "service",
-          "service": "backend",
-          "format": "url",
-          "env": "BACKEND_URL"
-        }
-      ]
-    }
-  },
+  "buildCommand": "cd trafficflow/frontend && npm install && npm run build",
+  "outputDirectory": "trafficflow/frontend/dist",
+  "framework": "vite",
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": {
-        "service": "backend"
-      }
-    },
-    {
       "source": "/(.*)",
-      "destination": {
-        "service": "frontend"
-      }
+      "destination": "/index.html"
     }
   ]
 }

@@ -25,6 +25,15 @@ async def upload_csv(file: UploadFile = File(...)):
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Could not parse CSV: {exc}")
 
+    # Safely persist upload to runtime storage (/tmp/trafficflow/uploads)
+    try:
+        from app.core.storage import RUNTIME_UPLOADS_DIR
+        RUNTIME_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+        saved_path = RUNTIME_UPLOADS_DIR / "latest_upload.csv"
+        saved_path.write_bytes(contents)
+    except Exception:
+        pass
+
     # Reset state for new upload
     state.update({
         "raw_df": df,

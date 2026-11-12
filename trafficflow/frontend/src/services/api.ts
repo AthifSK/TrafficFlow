@@ -1,22 +1,12 @@
 // API service layer – all backend calls go through here
 import axios from 'axios';
 
-// Determine API base URL:
-// 1. Explicit Vite environment variable (VITE_API_URL) if specified
-// 2. Bound service environment variable (BACKEND_URL) injected by Vercel Services
-// 3. Relative URL (empty string) for browser SPA so requests to /api route via Vercel rewrites or Vite proxy
-const getApiBaseUrl = (): string => {
-  if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
-  }
-  const globalProcess = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } })?.process;
-  if (globalProcess?.env?.BACKEND_URL) {
-    return globalProcess.env.BACKEND_URL;
-  }
-  return '';
-};
-
-const API_BASE = getApiBaseUrl();
+// Resolve backend API URL:
+// - In production on Vercel: Uses VITE_API_URL configured in Vercel project settings
+//   (e.g., https://trafficflow-backend.onrender.com)
+// - In local development: Falls back to http://localhost:8000
+const rawBase = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE = rawBase.replace(/\/+$/, '');
 
 const api = axios.create({
   baseURL: API_BASE,
